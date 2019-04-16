@@ -32,14 +32,25 @@ class Generator(nn.Module):
             nn.Conv2d(in_channels=16, out_channels=3, kernel_size=(3, 3), padding=(1, 1))
         )
 
+        self.dgan_conv_stack = nn.Sequential(
+            nn.ConvTranspose2d(in_channels=100, out_channels=512, kernel_size=4, stride=1, padding=0),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+            nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.ConvTranspose2d(in_channels=256, out_channels=128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.ConvTranspose2d(in_channels=128, out_channels=3, kernel_size=4, stride=2, padding=1)
+        )
+
         self.output_activation = nn.Tanh()
 
     def forward(self, z):
-        h = self.linear(z)
-        h = self.linear_activation(h)
-        h = torch.unsqueeze(torch.unsqueeze(h, -1), -1)
+        h = torch.unsqueeze(torch.unsqueeze(z, -1), -1)
 
-        h = self.conv_stack(h)
+        h = self.dgan_conv_stack(h)
         return self.output_activation(h)
 
     def loss(self, fake):
@@ -62,22 +73,24 @@ class Discriminator(nn.Module):
         )
 
         self.conv_stack = nn.Sequential(
-            nn.Conv2d(in_channels=3, out_channels=128, kernel_size=(5, 5), padding=(1, 1)),
-            nn.ELU(),
-            nn.Conv2d(in_channels=128, out_channels=64, kernel_size=(3, 3), padding=(1, 1)),
-            nn.AvgPool2d(3),
-            nn.ELU(),
-            nn.Conv2d(in_channels=64, out_channels=32, kernel_size=(3, 3), padding=(1, 1)),
-            nn.ELU(),
-            nn.Conv2d(in_channels=32, out_channels=16, kernel_size=(3, 3), padding=(1, 1)),
-            Flatten(),
-            nn.Linear(in_features=1600, out_features=1)
+            nn.Conv2d(in_channels=3, out_channels=128, kernel_size=4, stride=2, padding=1),
+            nn.InstanceNorm2d(128, affine=True),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=4, stride=2, padding=1),
+            nn.InstanceNorm2d(256, affine=True),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=4, stride=2, padding=1),
+            nn.InstanceNorm2d(512, affine=True),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(in_channels=512, out_channels=1, kernel_size=4, stride=1, padding=0)
         )
 
         self.device = device
 
     def forward(self, x):
-        return self.conv_stack(x)
+        h = self.conv_stack(x)
+        h = h.view(-1)
+        return h
 
     def clipWeights(self, c):
         for w in self.parameters():
@@ -102,6 +115,10 @@ class Discriminator(nn.Module):
         gp = self.gradientPenality(real, fake)
         return -w_distance + 10*gp
 
+def DGAN_initialization(model):
+    for p in model.parameters():
+        if p.dim() > 1:
+            nn.init.normal_(p, 0, 0.02)
 
 if __name__ == "__main__":
     lr = 0.00005
@@ -115,6 +132,9 @@ if __name__ == "__main__":
 
     g = Generator(z_size).to(device)
     d = Discriminator(im_size, device).to(device)
+
+    DGAN_initialization(g)
+    DGAN_initialization(d)
 
     g_optim = optim.Adam(g.parameters(), lr=lr)
     d_optim = optim.Adam(d.parameters(), lr=lr)
