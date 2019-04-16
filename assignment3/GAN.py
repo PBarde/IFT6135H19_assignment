@@ -4,6 +4,8 @@ from torch.autograd import  Variable, grad
 from torch import optim
 from classify_svhn import get_data_loader
 
+import matplotlib.pyplot as plt
+
 # This code is inspired by: https://github.com/wiseodd/generative-models/blob/master/GAN/wasserstein_gan/wgan_pytorch.py
 
 class Flatten(nn.Module):
@@ -59,10 +61,23 @@ class Discriminator(nn.Module):
             nn.Linear(in_features=512, out_features=1)
         )
 
+        self.conv_stack = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=128, kernel_size=(5, 5), padding=(1, 1)),
+            nn.ELU(),
+            nn.Conv2d(in_channels=128, out_channels=64, kernel_size=(3, 3), padding=(1, 1)),
+            nn.AvgPool2d(3),
+            nn.ELU(),
+            nn.Conv2d(in_channels=64, out_channels=32, kernel_size=(3, 3), padding=(1, 1)),
+            nn.ELU(),
+            nn.Conv2d(in_channels=32, out_channels=16, kernel_size=(3, 3), padding=(1, 1)),
+            Flatten(),
+            nn.Linear(in_features=1600, out_features=1)
+        )
+
         self.device = device
 
     def forward(self, x):
-        return self.mlp_stack(x)
+        return self.conv_stack(x)
 
     def clipWeights(self, c):
         for w in self.parameters():
@@ -73,7 +88,7 @@ class Discriminator(nn.Module):
         e = Variable(torch.rand(shape, device=self.device))
 
         x_hat = e*real + (1-e)*fake
-        x_hat = Variable(x_hat, requires_grad=True).to(device)
+        x_hat = Variable(x_hat, requires_grad=True).to(self.device)
         d_hat = self(x_hat)
         d_grad = grad(d_hat, x_hat, torch.ones(d_hat.shape, device=self.device), create_graph=True)[0].view(x_hat.size(0), -1)
 
