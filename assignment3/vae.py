@@ -8,6 +8,7 @@ from torch import nn
 
 
 class VAE(nn.Module):
+    # type must be one of 'MNIST', 'SVHN-FC' and 'SVHN-CONV'
     def __init__(self, latent_size=100, type='MNIST'):
         super(VAE, self).__init__()
         self.type = type
@@ -52,31 +53,49 @@ class VAE(nn.Module):
             self.decoder_output_activation = nn.Sigmoid()
 
         else:
-            input_size = 3072
-            hidden_size = 2048
-            dropout_p = 0.2
-            # Encoder
-            self.encoder_sequence = nn.Sequential(
-                # input
-                nn.BatchNorm1d(input_size),
-                # layer 1
-                nn.Linear(in_features=input_size, out_features=hidden_size),
-                nn.BatchNorm1d(hidden_size),
-                nn.ReLU(),
-                nn.Dropout(p=dropout_p),
-                # layer 2
-                nn.Linear(in_features=hidden_size, out_features=hidden_size),
-                nn.BatchNorm1d(hidden_size),
-                nn.ReLU(),
-                nn.Dropout(p=dropout_p),
-                # layer 3
-                nn.Linear(in_features=hidden_size, out_features=hidden_size),
-                nn.BatchNorm1d(hidden_size),
-                nn.ReLU(),
-                nn.Dropout(p=dropout_p)
-            )
-            self.encoder_linear_mean = nn.Linear(in_features=hidden_size, out_features=latent_size)
-            self.encoder_linear_var = nn.Linear(in_features=hidden_size, out_features=latent_size)
+            if type == 'SVHN-FC':
+                input_size = 3072
+                hidden_size = 2048
+                dropout_p = 0.2
+                # Encoder
+                self.encoder_sequence = nn.Sequential(
+                    # input
+                    nn.BatchNorm1d(input_size),
+                    # layer 1
+                    nn.Linear(in_features=input_size, out_features=hidden_size),
+                    nn.BatchNorm1d(hidden_size),
+                    nn.ReLU(),
+                    nn.Dropout(p=dropout_p),
+                    # layer 2
+                    nn.Linear(in_features=hidden_size, out_features=hidden_size),
+                    nn.BatchNorm1d(hidden_size),
+                    nn.ReLU(),
+                    nn.Dropout(p=dropout_p),
+                    # layer 3
+                    nn.Linear(in_features=hidden_size, out_features=hidden_size),
+                    nn.BatchNorm1d(hidden_size),
+                    nn.ReLU(),
+                    nn.Dropout(p=dropout_p)
+                )
+                self.encoder_linear_mean = nn.Linear(in_features=hidden_size, out_features=latent_size)
+                self.encoder_linear_var = nn.Linear(in_features=hidden_size, out_features=latent_size)
+
+            else:
+                # Encoder
+                self.encoder_sequence = nn.Sequential(
+                    nn.Conv2d(in_channels=3, out_channels=128, kernel_size=4, stride=2, padding=1),
+                    nn.InstanceNorm2d(128, affine=True),
+                    nn.LeakyReLU(0.2),
+                    nn.Conv2d(in_channels=128, out_channels=256, kernel_size=4, stride=2, padding=1),
+                    nn.InstanceNorm2d(256, affine=True),
+                    nn.LeakyReLU(0.2),
+                    nn.Conv2d(in_channels=256, out_channels=512, kernel_size=4, stride=2, padding=1),
+                    nn.InstanceNorm2d(512, affine=True),
+                    nn.LeakyReLU(0.2),
+                    nn.Conv2d(in_channels=512, out_channels=128, kernel_size=3, stride=1, padding=1)
+                )
+                self.encoder_linear_mean = nn.Linear(in_features=2048, out_features=latent_size)
+                self.encoder_linear_var = nn.Linear(in_features=2048, out_features=latent_size)
 
             # Decoder (same as GAN generator)
             self.decoder_sequence = nn.Sequential(
@@ -93,9 +112,16 @@ class VAE(nn.Module):
             )
             self.decoder_output_activation = nn.Tanh()
 
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.normal_(p, 0, 0.02)
+
     def encode(self, x):
         h = self.encoder_sequence(x)
-        h = torch.squeeze(h)
+        if self.type == 'SVHN-CONV':
+            h = h.view(-1, 2048)
+        else:
+            h = torch.squeeze(h)
         z_mu = self.encoder_linear_mean(h)
         z_sig2 = self.encoder_linear_var(h)
         return z_mu, z_sig2
