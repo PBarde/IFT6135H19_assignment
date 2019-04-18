@@ -6,7 +6,9 @@ from classify_svhn import get_data_loader
 
 import matplotlib.pyplot as plt
 
-# This code is inspired by: https://github.com/wiseodd/generative-models/blob/master/GAN/wasserstein_gan/wgan_pytorch.py
+# This code is inspired by:
+# - https://github.com/wiseodd/generative-models/blob/master/GAN/wasserstein_gan/wgan_pytorch.py
+# - https://github.com/LynnHo/WGAN-GP-DRAGAN-Celeba-Pytorch
 
 class Flatten(nn.Module):
     def forward(self, x):
