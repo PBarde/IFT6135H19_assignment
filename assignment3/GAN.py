@@ -1,10 +1,6 @@
 import torch
 from torch import nn
 from torch.autograd import  Variable, grad
-from torch import optim
-from classify_svhn import get_data_loader
-
-import matplotlib.pyplot as plt
 
 # This code is inspired by:
 # - https://github.com/wiseodd/generative-models/blob/master/GAN/wasserstein_gan/wgan_pytorch.py
@@ -121,60 +117,3 @@ def DGAN_initialization(model):
     for p in model.parameters():
         if p.dim() > 1:
             nn.init.normal_(p, 0, 0.02)
-
-if __name__ == "__main__":
-    lr = 0.00005
-    batch_size = 16
-    cliping = 0.01
-    z_size = 100
-    im_size = 32
-    n_critic = 5
-
-    device = torch.device("cpu")
-
-    g = Generator(z_size).to(device)
-    d = Discriminator(im_size, device).to(device)
-
-    DGAN_initialization(g)
-    DGAN_initialization(d)
-
-    g_optim = optim.Adam(g.parameters(), lr=lr)
-    d_optim = optim.Adam(d.parameters(), lr=lr)
-
-    train, valid, test = get_data_loader("svhn", batch_size)
-
-    for i in range(10):
-
-        # Train more the dicriminator
-        for j in range(n_critic):
-            d_optim.zero_grad()
-            g_optim.zero_grad()
-
-            z = Variable(torch.randn(batch_size, z_size, device=device))
-            fake_sample = g(z)
-
-            # get a batch of real sample
-            dataloader_iterator = iter(train)
-            try:
-                real_sample, target = next(dataloader_iterator)
-            except StopIteration:
-                dataloader_iterator = iter(train)
-                real_sample, target = next(dataloader_iterator)
-
-            real_sample = real_sample.to(device)
-
-            d_loss = d.loss(real_sample, fake_sample)
-            d_loss.backward()
-            d_optim.step()
-
-        # Train the generator
-        d_optim.zero_grad()
-        g_optim.zero_grad()
-
-        z = Variable(torch.randn(batch_size, z_size, device=device))
-
-        fake_sample = g(z)
-
-        g_loss = g.loss(d(fake_sample))
-        g_loss.backward()
-        g_optim.step()
